@@ -102,9 +102,9 @@ function App() {
             <div>
               <h3 className="font-semibold mb-4">お問い合わせ</h3>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p>📞 0120-123-456</p>
+                <p>📞 073-456-6227</p>
                 <p>📧 info@kaigo-vehicle.jp</p>
-                <p>🕒 24時間365日対応</p>
+                <p>🕒 09：00-17：00</p>
               </div>
             </div>
             
@@ -114,17 +114,14 @@ function App() {
                 <p>• 介護車両の予約・手配</p>
                 <p>• 医療機関への送迎</p>
                 <p>• デイサービス送迎</p>
-                <p>• 緊急搬送対応</p>
+                <p>• 通院・外出支援</p>
               </div>
             </div>
             
             <div>
               <h3 className="font-semibold mb-4">対応エリア</h3>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p>• 東京都全域</p>
-                <p>• 神奈川県全域</p>
-                <p>• 埼玉県全域</p>
-                <p>• 千葉県全域</p>
+                <p>• 和歌山市内</p>
               </div>
             </div>
           </div>

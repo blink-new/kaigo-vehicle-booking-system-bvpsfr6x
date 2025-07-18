@@ -25,10 +25,10 @@ export function Header() {
           <div className="hidden md:flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
-              <span>24時間対応</span>
+              <span>09：00-17：00</span>
             </div>
             <div className="text-primary font-medium">
-              📞 0120-123-456
+              📞 073-456-6227
             </div>
           </div>
         </div>
