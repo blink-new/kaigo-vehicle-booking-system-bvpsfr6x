@@ -67,20 +67,7 @@ export const questionSteps: QuestionStep[] = [
     ],
     required: true
   },
-  {
-    id: 'distance',
-    title: '移動距離をお教えください',
-    description: '片道の移動距離（概算）',
-    type: 'single',
-    options: [
-      { value: '5', label: '5km以内' },
-      { value: '10', label: '5-10km' },
-      { value: '20', label: '10-20km' },
-      { value: '30', label: '20-30km' },
-      { value: '50', label: '30km以上' }
-    ],
-    required: true
-  },
+
   {
     id: 'area',
     title: 'ご利用エリアをお選びください',

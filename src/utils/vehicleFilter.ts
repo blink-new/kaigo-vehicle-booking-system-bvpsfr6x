@@ -22,23 +22,80 @@ export function filterVehiclesByAnswers(answers: UserAnswers): VehicleType[] {
   })
 }
 
+// 和歌山市内の主要地点間の距離データ（km）
+const DISTANCE_MAP: { [key: string]: number } = {
+  '和歌山駅': 0,
+  '和歌山市駅': 2,
+  '和歌山城': 1,
+  '和歌山県立医科大学附属病院': 3,
+  '日本赤十字社和歌山医療センター': 5,
+  '和歌山労災病院': 8,
+  '和歌山市民病院': 4,
+  '紀の川市': 15,
+  '岩出市': 12,
+  '海南市': 10,
+  '橋本市': 25,
+  '有田市': 20
+}
+
+// 地名から距離を推定する関数
+function estimateDistance(pickup: string, destination: string): number {
+  // 簡易的な距離推定ロジック
+  const pickupDistance = findClosestLocation(pickup)
+  const destinationDistance = findClosestLocation(destination)
+  
+  // 基本距離 + 地点間の差
+  const estimatedDistance = Math.abs(pickupDistance - destinationDistance) + 2
+  
+  // 最小2km、最大50kmで制限
+  return Math.max(2, Math.min(50, estimatedDistance))
+}
+
+// 最も近い地点を見つける関数
+function findClosestLocation(location: string): number {
+  const locationLower = location.toLowerCase()
+  
+  // 完全一致を探す
+  for (const [key, distance] of Object.entries(DISTANCE_MAP)) {
+    if (locationLower.includes(key.toLowerCase())) {
+      return distance
+    }
+  }
+  
+  // 部分一致を探す
+  if (locationLower.includes('病院') || locationLower.includes('医療')) {
+    return 5 // 平均的な病院までの距離
+  }
+  if (locationLower.includes('駅')) {
+    return 3 // 平均的な駅までの距離
+  }
+  if (locationLower.includes('市役所') || locationLower.includes('役場')) {
+    return 4
+  }
+  
+  // デフォルト距離
+  return 5
+}
+
 export function calculateEstimatedCost(
   vehicle: VehicleType,
-  distance: number,
   answers: UserAnswers
 ): number {
-  const distanceNum = parseInt(distance.toString())
+  // 乗車地・降車地から距離を自動計算
+  const distance = answers.pickup && answers.destination 
+    ? estimateDistance(answers.pickup, answers.destination)
+    : 5 // デフォルト距離
   
   // 要介護認定とケアプランに基づく料金計算
   if (answers.care_certification === 'yes' && answers.care_plan === 'yes') {
     // 介護保険適用（介助タクシー）
     const basePrice = vehicle.basePrice * 0.1 // 1割負担
-    const distanceCost = vehicle.pricePerKm * distanceNum * 0.1
+    const distanceCost = vehicle.pricePerKm * distance * 0.1
     return Math.round(basePrice + distanceCost)
   } else {
     // 福祉タクシー（自費）
     const basePrice = vehicle.basePrice
-    const distanceCost = vehicle.pricePerKm * distanceNum
+    const distanceCost = vehicle.pricePerKm * distance
     return Math.round(basePrice + distanceCost)
   }
 }
