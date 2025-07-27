@@ -1,25 +1,166 @@
 import { VehicleType, UserAnswers } from '../types'
 import { vehicleTypes } from '../data/vehicles'
 
+// 車両の適合度を計算するスコアリングシステム
+interface VehicleScore {
+  vehicle: VehicleType
+  score: number
+  reasons: string[]
+}
+
 export function filterVehiclesByAnswers(answers: UserAnswers): VehicleType[] {
   // エリアチェック - 和歌山市以外は利用不可
   if (answers.area === 'other') {
     return []
   }
   
-  return vehicleTypes.filter(vehicle => {
-    // 車椅子が必要な場合
-    if (answers.mobility === 'wheelchair' && !vehicle.wheelchairAccessible) {
-      return false
+  // 各車両にスコアを付けて評価
+  const scoredVehicles: VehicleScore[] = vehicleTypes.map(vehicle => {
+    const score = calculateVehicleScore(vehicle, answers)
+    return {
+      vehicle,
+      score: score.totalScore,
+      reasons: score.reasons
     }
-    
-    // ストレッチャーが必要な場合
-    if (answers.mobility === 'stretcher' && !vehicle.stretcherCompatible) {
-      return false
+  }).filter(item => item.score > 0) // スコア0以下は除外
+  
+  // スコア順にソートして上位2-3台を選択
+  const sortedVehicles = scoredVehicles.sort((a, b) => b.score - a.score)
+  
+  // 最大3台まで、かつスコアが50以上のもののみ返す
+  const topVehicles = sortedVehicles
+    .filter(item => item.score >= 50)
+    .slice(0, 3)
+    .map(item => item.vehicle)
+  
+  // 最低1台は返すようにする（条件に合うものがある場合）
+  if (topVehicles.length === 0 && sortedVehicles.length > 0) {
+    return [sortedVehicles[0].vehicle]
+  }
+  
+  return topVehicles
+}
+
+// 車両の適合度スコアを計算
+function calculateVehicleScore(vehicle: VehicleType, answers: UserAnswers): {
+  totalScore: number
+  reasons: string[]
+} {
+  let score = 100 // 基本スコア
+  const reasons: string[] = []
+  
+  // 必須条件チェック（満たさない場合は0点）
+  if (answers.mobility === 'wheelchair' && !vehicle.wheelchairAccessible) {
+    return { totalScore: 0, reasons: ['車椅子対応が必要ですが、この車両は対応していません'] }
+  }
+  
+  if (answers.mobility === 'stretcher' && !vehicle.stretcherCompatible) {
+    return { totalScore: 0, reasons: ['ストレッチャー対応が必要ですが、この車両は対応していません'] }
+  }
+  
+  // 移動手段による適合度
+  if (answers.mobility === 'walking') {
+    if (vehicle.id === 'regular-sedan' || vehicle.id === 'toyota-sienta' || vehicle.id === 'japan-taxi') {
+      score += 30
+      reasons.push('歩行可能な方に最適な車両です')
+    } else {
+      score -= 20
+      reasons.push('歩行可能な方には少し大きめの車両です')
     }
-    
-    return true
-  })
+  }
+  
+  if (answers.mobility === 'walking_aid') {
+    if (vehicle.id === 'japan-taxi' || vehicle.id === 'toyota-sienta') {
+      score += 25
+      reasons.push('歩行補助具をお使いの方に適した低床設計です')
+    } else if (vehicle.id === 'regular-sedan') {
+      score += 10
+      reasons.push('乗り降りに少し介助が必要な場合があります')
+    }
+  }
+  
+  if (answers.mobility === 'wheelchair') {
+    if (vehicle.wheelchairAccessible) {
+      score += 40
+      reasons.push('車椅子のまま乗車可能です')
+      
+      if (vehicle.id === 'wheelchair-light-vehicle') {
+        score += 20
+        reasons.push('コンパクトで取り回しが良い車椅子専用車両です')
+      } else if (vehicle.id === 'wheelchair-van') {
+        score += 15
+        reasons.push('広々とした車椅子対応車両です')
+      }
+    }
+  }
+  
+  if (answers.mobility === 'stretcher') {
+    if (vehicle.stretcherCompatible) {
+      score += 50
+      reasons.push('ストレッチャーでの搬送に対応しています')
+    }
+  }
+  
+  // 同行者数による適合度
+  const totalPassengers = 1 + (parseInt(answers.companions) || 0)
+  if (vehicle.capacity >= totalPassengers) {
+    if (vehicle.capacity === totalPassengers || vehicle.capacity === totalPassengers + 1) {
+      score += 20
+      reasons.push('乗車人数にちょうど良いサイズです')
+    } else if (vehicle.capacity > totalPassengers + 2) {
+      score -= 10
+      reasons.push('乗車人数に対して少し大きめの車両です')
+    }
+  } else {
+    score -= 50
+    reasons.push('乗車人数が車両定員を超えています')
+  }
+  
+  // 利用目的による適合度
+  if (answers.purpose === 'hospital') {
+    if (vehicle.id === 'stretcher-ambulance') {
+      score += 15
+      reasons.push('医療機関への通院に適した設備を備えています')
+    } else if (vehicle.id === 'japan-taxi') {
+      score += 10
+      reasons.push('バリアフリー対応で通院に適しています')
+    }
+  }
+  
+  if (answers.purpose === 'shopping' || answers.purpose === 'leisure') {
+    if (vehicle.id === 'minivan' || vehicle.id === 'toyota-sienta') {
+      score += 10
+      reasons.push('荷物スペースが広く、お出かけに適しています')
+    }
+  }
+  
+  // 料金による適合度（安い方が高スコア）
+  const estimatedCost = calculateEstimatedCost(vehicle, answers)
+  if (estimatedCost < 2000) {
+    score += 15
+    reasons.push('料金が比較的リーズナブルです')
+  } else if (estimatedCost > 5000) {
+    score -= 10
+    reasons.push('料金が高めになります')
+  }
+  
+  // 要介護度による適合度
+  if (answers.care_level) {
+    const careLevel = parseInt(answers.care_level)
+    if (careLevel >= 3) {
+      if (vehicle.wheelchairAccessible || vehicle.stretcherCompatible) {
+        score += 20
+        reasons.push('要介護度が高い方に適した車両です')
+      }
+    } else if (careLevel <= 2) {
+      if (vehicle.id === 'regular-sedan' || vehicle.id === 'japan-taxi') {
+        score += 15
+        reasons.push('要介護度に適した車両です')
+      }
+    }
+  }
+  
+  return { totalScore: Math.max(0, score), reasons }
 }
 
 // 和歌山市内の主要地点間の距離データ（km）
@@ -167,4 +308,59 @@ export function getServiceType(answers: UserAnswers): {
     description: '一般的な福祉タクシーサービスです',
     coverage: '全額自己負担'
   }
+}
+
+// 絞り込み精度向上のための追加情報提案
+export function getSuggestionForBetterFiltering(answers: UserAnswers): {
+  missingInfo: string[]
+  suggestions: string[]
+} {
+  const missingInfo: string[] = []
+  const suggestions: string[] = []
+  
+  // 身体状況の詳細
+  if (!answers.mobility || answers.mobility === 'walking') {
+    missingInfo.push('具体的な身体状況')
+    suggestions.push('歩行距離（何メートル歩けるか）')
+    suggestions.push('階段の昇降は可能か')
+    suggestions.push('立ち座りに介助が必要か')
+  }
+  
+  // 医療機器の使用
+  if (answers.purpose === 'hospital') {
+    missingInfo.push('医療機器の使用状況')
+    suggestions.push('酸素ボンベの使用有無')
+    suggestions.push('点滴などの医療機器の有無')
+    suggestions.push('感染症対策の必要性')
+  }
+  
+  // 時間帯・頻度
+  missingInfo.push('利用時間帯・頻度')
+  suggestions.push('利用予定時間帯（朝・昼・夕方・夜間）')
+  suggestions.push('利用頻度（週何回程度）')
+  suggestions.push('緊急時の利用可能性')
+  
+  // 予算
+  if (!answers.budget) {
+    missingInfo.push('予算の目安')
+    suggestions.push('1回あたりの予算上限')
+    suggestions.push('月額予算の目安')
+  }
+  
+  // 介助者の詳細
+  if (answers.companions && parseInt(answers.companions) > 0) {
+    missingInfo.push('介助者の詳細')
+    suggestions.push('介助者の介護経験の有無')
+    suggestions.push('介助者の年齢・体力')
+    suggestions.push('車椅子操作の可否')
+  }
+  
+  // 特別な配慮
+  missingInfo.push('特別な配慮事項')
+  suggestions.push('認知症の有無・程度')
+  suggestions.push('コミュニケーション方法（聴覚・視覚障害）')
+  suggestions.push('アレルギーや持病')
+  suggestions.push('車酔いしやすいか')
+  
+  return { missingInfo, suggestions }
 }

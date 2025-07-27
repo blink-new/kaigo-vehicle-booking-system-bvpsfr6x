@@ -6,7 +6,7 @@ import { Separator } from './ui/separator'
 import { ArrowLeft, FileText, Phone, CheckCircle, AlertCircle, Info } from 'lucide-react'
 import { VehicleCard } from './VehicleCard'
 import { UserAnswers, VehicleType } from '../types'
-import { filterVehiclesByAnswers, calculateEstimatedCost, getRequiredDocuments, getServiceType } from '../utils/vehicleFilter'
+import { filterVehiclesByAnswers, calculateEstimatedCost, getRequiredDocuments, getServiceType, getSuggestionForBetterFiltering } from '../utils/vehicleFilter'
 
 // 距離推定関数（vehicleFilter.tsと同じロジック）
 function estimateDistance(pickup: string, destination: string): number {
@@ -63,6 +63,7 @@ export function ResultsPage({ answers, onBack }: ResultsPageProps) {
   const availableVehicles = filterVehiclesByAnswers(answers)
   const requiredDocuments = getRequiredDocuments(answers)
   const serviceType = getServiceType(answers)
+  const filteringSuggestions = getSuggestionForBetterFiltering(answers)
   // 乗車地・降車地から距離を自動計算
   const distance = answers.pickup && answers.destination 
     ? estimateDistance(answers.pickup, answers.destination)
@@ -229,19 +230,71 @@ export function ResultsPage({ answers, onBack }: ResultsPageProps) {
         </CardContent>
       </Card>
 
+      {/* 絞り込み精度向上の提案 */}
+      {availableVehicles.length > 1 && filteringSuggestions.suggestions.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-800">
+              <Info className="w-5 h-5" />
+              より精密な車両選択のために
+            </CardTitle>
+            <CardDescription className="text-blue-700">
+              以下の情報があると、さらに最適な車両を2-3台に絞り込むことができます
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-blue-700">
+            <div className="grid md:grid-cols-2 gap-4">
+              {filteringSuggestions.missingInfo.map((info, index) => (
+                <div key={index} className="space-y-2">
+                  <h4 className="font-medium">{info}</h4>
+                  <ul className="text-sm space-y-1">
+                    {filteringSuggestions.suggestions
+                      .slice(index * 3, (index + 1) * 3)
+                      .map((suggestion, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="text-blue-500 mt-1">•</span>
+                          {suggestion}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+              <p className="text-sm font-medium">
+                📞 詳細なご相談は電話でお気軽にお問い合わせください: 073-456-6227
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* 利用可能車両 */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold">利用可能な車両</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">利用可能な車両</h2>
+          {availableVehicles.length > 0 && (
+            <Badge variant="outline" className="text-sm">
+              {availableVehicles.length}台が条件に適合
+            </Badge>
+          )}
+        </div>
         {availableVehicles.length > 0 ? (
           <div className="grid gap-4">
-            {availableVehicles.map((vehicle) => (
-              <VehicleCard
-                key={vehicle.id}
-                vehicle={vehicle}
-                estimatedCost={calculateEstimatedCost(vehicle, answers)}
-                onContact={handleContact}
-                serviceType={serviceType.type}
-              />
+            {availableVehicles.map((vehicle, index) => (
+              <div key={vehicle.id} className="relative">
+                {index === 0 && (
+                  <Badge className="absolute -top-2 -right-2 z-10 bg-accent text-accent-foreground">
+                    最適
+                  </Badge>
+                )}
+                <VehicleCard
+                  vehicle={vehicle}
+                  estimatedCost={calculateEstimatedCost(vehicle, answers)}
+                  onContact={handleContact}
+                  serviceType={serviceType.type}
+                />
+              </div>
             ))}
           </div>
         ) : (
